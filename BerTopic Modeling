@@ -1,0 +1,62 @@
+!pip install bertopic==0.14.0
+
+from bertopic import BERTopic
+import collections
+import math
+import random
+import sys
+import time
+from typing import Dict, List, Tuple
+
+# Use Tensorflow 2.0
+import tensorflow as tf
+import numpy as np
+import pandas as pd
+
+from sentence_transformers import SentenceTransformer
+sentence_model = SentenceTransformer("xlm-r-bert-base-nli-stsb-mean-tokens", device="cuda")
+
+from transformers.pipelines import pipeline
+embedding_model = pipeline("feature-extraction", model="distilbert-base-cased")
+
+from hdbscan import HDBSCAN
+hdbscan_model = HDBSCAN(min_cluster_size=10, metric='euclidean', cluster_selection_method='eom', prediction_data=True)
+
+from umap import UMAP
+umap_model = UMAP(n_neighbors=15, n_components=10, min_dist=0.0, metric='cosine')
+
+from sklearn.feature_extraction.text import CountVectorizer
+vectorizer_model = CountVectorizer(ngram_range=(2, 2), stop_words="english")
+
+from bertopic.vectorizers import ClassTfidfTransformer
+ctfidf_model = ClassTfidfTransformer()
+
+docs = pd.read_csv('patent_file.csv')
+
+topic_model = BERTopic(embedding_model=embedding_model, umap_model=umap_model,hdbscan_model=hdbscan_model, vectorizer_model=vectorizer_model, ctfidf_model=ctfidf_model, calculate_probabilities=True, nr_topics='auto').fit(docs['abstract'])
+topic = topic_model.get_topic_info()
+topic = pd.DataFrame(data=topic)
+topic = topic.reset_index(drop = True)
+
+#Relevant Topic Selection
+topic_relevant_1= topic_info.loc[(topic_info.Topic == -1)|(topic_info.Topic == 0)|(topic_info.Topic == 1)|(topic_info.Topic == 2)|(topic_info.Topic == 3)|(topic_info.Topic == 8)|(topic_info.Topic == 11)|(topic_info.Topic == 19)|(topic_info.Topic == 13)|(topic_info.Topic == 15)|(topic_info.Topic == 19)|(topic_info.Topic == 33)]
+topic_relevant_1 = topic_relevant_1.reset_index(drop = True)
+doc_relavant_1 = topic_relevant_1['Document']
+
+# Iterative Topic Modeling
+topic_model = BERTopic(embedding_model=embedding_model, umap_model=umap_model,hdbscan_model=hdbscan_model, vectorizer_model=vectorizer_model, ctfidf_model=ctfidf_model, calculate_probabilities=True, nr_topics='auto').fit(topic_relevant_1['Document'])
+topic = topic_model.get_topic_info()
+topic = pd.DataFrame(data=topic)
+
+# Intertopic Distance Map
+from torch import seed
+fig = topic_model.visualize_topics(); fig
+
+hierarchical_topic = topic_model.hierarchical_topics(topic_relevant_1['Document'])
+hierarchical_topic
+tree = topic_model.get_topic_tree(hierarchical_topic)
+print(tree)
+topic_model.visualize_hierarchy(hierarchical_topics=hierarchical_topic)
+topic_model.visualize_hierarchy(top_n_topics=20)
+
+# Manual Labeling
